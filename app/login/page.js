@@ -40,8 +40,10 @@ export default function LoginPage() {
     } catch (err) {
       if (err.message === 'Invalid login credentials') {
         setError('Email atau password salah.')
-      } else if (err.message.includes('already registered')) {
-        setError('Email sudah terdaftar. Silakan login.')
+      } else if (err.message?.includes('already registered')) {
+        setError('Email sudah terdaftar. Silakan masuk.')
+      } else if (err.message?.includes('rate limit') || err.code === 'over_email_send_rate_limit') {
+        setError('Batas pengiriman email Supabase tercapai. Gunakan akun admin atau matikan "Confirm email" di Supabase Dashboard > Authentication > Providers > Email.')
       } else {
         setError(err.message || 'Terjadi kesalahan. Coba lagi.')
       }
