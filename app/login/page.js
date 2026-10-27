@@ -54,7 +54,9 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <div className="login-logo">T</div>
+          <div className="login-logo">
+            <img src="/logo.png" alt="TEOFFE" width={80} height={80} />
+          </div>
           <h1>TEOFFE</h1>
           <p>A Perfect Blend — Admin Panel</p>
         </div>

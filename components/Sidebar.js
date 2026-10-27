@@ -35,7 +35,9 @@ export default function Sidebar({ isOpen, onClose }) {
       {isOpen && <div className="mobile-overlay" onClick={onClose} />}
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         <div className="sidebar-brand">
-          <div className="sidebar-logo">T</div>
+          <div className="sidebar-logo">
+            <img src="/logo.png" alt="TEOFFE" width={44} height={44} />
+          </div>
           <div className="sidebar-brand-text">
             <h3>TEOFFE</h3>
             <p>sip happens.</p>
