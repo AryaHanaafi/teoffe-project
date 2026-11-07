@@ -80,9 +80,8 @@ export default function DashboardPage() {
     const todayItems = todayOrders.reduce((sum, o) => sum + o.total_items, 0)
     const weekRevenue = weekOrders.reduce((sum, o) => sum + o.total_amount, 0)
     const monthRevenue = monthOrders.reduce((sum, o) => sum + o.total_amount, 0)
-    const lowStockProducts = products.filter(p => p.current_stock < 10)
-    const totalStock = products.reduce((sum, p) => sum + p.current_stock, 0)
-    return { todayRevenue, todayCount, todayItems, weekRevenue, monthRevenue, lowStockProducts, totalStock }
+    const activeProductsCount = products.filter(p => p.is_active).length
+    return { todayRevenue, todayCount, todayItems, weekRevenue, monthRevenue, activeProductsCount }
   }, [todayOrders, weekOrders, monthOrders, products])
 
   // Product sales distribution (from today's orders)
@@ -123,27 +122,6 @@ export default function DashboardPage() {
         <p>Selamat datang di TEOFFE Admin — A Perfect Blend ☕</p>
       </div>
 
-      {/* Low Stock Alert */}
-      {stats.lowStockProducts.length > 0 && (
-        <div className="low-stock-alert animate-slideUp">
-          <div className="low-stock-alert-header">
-            <span>⚠</span>
-            <span>Stok Rendah — {stats.lowStockProducts.length} produk perlu diisi ulang</span>
-          </div>
-          <div className="low-stock-items">
-            {stats.lowStockProducts.map(p => (
-              <div key={p.id} className="low-stock-item">
-                <span className="stock-dot low" />
-                <span>{p.name}</span>
-                <span style={{ color: 'var(--status-error)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                  {p.current_stock}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Stats Cards */}
       <div className="stats-grid">
         <div className="stat-card animate-slideUp stagger-1">
@@ -181,12 +159,12 @@ export default function DashboardPage() {
 
         <div className="stat-card animate-slideUp stagger-4">
           <div className="stat-card-header">
-            <span className="stat-card-label">Total Stok</span>
-            <div className="stat-card-icon" style={{ background: 'rgba(74, 222, 128, 0.15)', color: 'var(--status-success)' }}>📦</div>
+            <span className="stat-card-label">Menu Aktif</span>
+            <div className="stat-card-icon" style={{ background: 'rgba(74, 222, 128, 0.15)', color: 'var(--status-success)' }}>☕</div>
           </div>
-          <div className="stat-card-value">{stats.totalStock}</div>
-          <div className={`stat-card-change ${stats.lowStockProducts.length > 0 ? 'negative' : 'positive'}`}>
-            <span>{stats.lowStockProducts.length > 0 ? `${stats.lowStockProducts.length} stok rendah` : 'Semua stok aman'}</span>
+          <div className="stat-card-value">{stats.activeProductsCount} Menu</div>
+          <div className="stat-card-change positive">
+            <span>Siap dijual di kasir</span>
           </div>
         </div>
       </div>

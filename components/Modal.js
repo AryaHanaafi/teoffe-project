@@ -3,7 +3,7 @@
 export default function Modal({ isOpen, onClose, title, children, footer, size = 'md' }) {
   if (!isOpen) return null
 
-  const maxWidth = size === 'lg' ? '640px' : size === 'sm' ? '380px' : '480px'
+  const maxWidth = size === 'xl' ? '820px' : size === 'lg' ? '640px' : size === 'sm' ? '380px' : '480px'
 
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>

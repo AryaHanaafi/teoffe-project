@@ -135,13 +135,13 @@ export default function LaporanPage() {
       produk: p.name,
       terjual: p.sold,
       revenue: p.revenue,
-      diproduksi: p.produced,
+      status: products.find(pr => pr.slug === p.slug)?.is_active ? 'Aktif' : 'Nonaktif',
     }))
     const csv = toCSV(data, [
       { key: 'produk', label: 'Produk' },
       { key: 'terjual', label: 'Terjual' },
       { key: 'revenue', label: 'Revenue' },
-      { key: 'diproduksi', label: 'Diproduksi' },
+      { key: 'status', label: 'Status Menu' },
     ])
     const dateStr = new Date().toISOString().slice(0, 10)
     downloadFile(csv, `laporan-teoffe-${dateStr}.csv`)
@@ -160,7 +160,7 @@ export default function LaporanPage() {
     const csv = toCSV(data, [
       { key: 'nomor', label: 'No. Pesanan' },
       { key: 'tanggal', label: 'Tanggal' },
-      { key: 'pelanggan', label: 'Pelanggan' },
+      { key: 'pelanggan', label: 'Atas Nama' },
       { key: 'total', label: 'Total (Rp)' },
       { key: 'item', label: 'Jumlah Item' },
       { key: 'pembayaran', label: 'Pembayaran' },
@@ -352,8 +352,7 @@ export default function LaporanPage() {
               <th>Produk</th>
               <th>Terjual</th>
               <th>Revenue</th>
-              <th>Diproduksi</th>
-              <th>Stok Saat Ini</th>
+              <th>Status Menu</th>
               <th>Grafik Penjualan</th>
             </tr>
           </thead>
@@ -377,12 +376,8 @@ export default function LaporanPage() {
                     </span>
                   </td>
                   <td>
-                    <span className="badge badge-info">+{p.produced}</span>
-                  </td>
-                  <td>
-                    <span className={`text-mono ${(product?.current_stock || 0) < 10 ? '' : ''}`}
-                      style={{ fontWeight: 600, color: (product?.current_stock || 0) < 10 ? 'var(--status-error)' : 'var(--status-success)' }}>
-                      {product?.current_stock || 0}
+                    <span className={`badge ${product?.is_active ? 'badge-success' : 'badge-error'}`} style={{ fontSize: '0.75rem' }}>
+                      {product?.is_active ? '● Aktif' : '● Nonaktif'}
                     </span>
                   </td>
                   <td style={{ width: '200px' }}>

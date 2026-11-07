@@ -10,6 +10,7 @@ export default function PenjualanPage() {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
   const [orders, setOrders] = useState([])
   const [cart, setCart] = useState([])
   const [customerName, setCustomerName] = useState('')
@@ -17,8 +18,11 @@ export default function PenjualanPage() {
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [orderDetailModal, setOrderDetailModal] = useState({ open: false, order: null })
+  const [receiptModal, setReceiptModal] = useState({ open: false, order: null, items: [] })
   const [filterStatus, setFilterStatus] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [posCategory, setPosCategory] = useState('all')
+  const [posSearch, setPosSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [tab, setTab] = useState('pos')
   const PAGE_SIZE = 10
@@ -30,12 +34,14 @@ export default function PenjualanPage() {
   async function fetchData() {
     setLoading(true)
     try {
-      const [productsRes, ordersRes] = await Promise.all([
+      const [productsRes, ordersRes, categoriesRes] = await Promise.all([
         supabase.from('products').select('*, categories(name)').eq('is_active', true).order('name'),
         supabase.from('orders').select('*, order_items(*, products(name, slug, color_hex))').order('created_at', { ascending: false }).limit(200),
+        supabase.from('categories').select('*').order('name'),
       ])
       setProducts(productsRes.data || [])
       setOrders(ordersRes.data || [])
+      setCategories(categoriesRes.data || [])
     } catch (err) {
       console.error('Fetch error:', err)
       showToast('Gagal memuat data', 'error')
@@ -46,17 +52,9 @@ export default function PenjualanPage() {
 
   // Cart functions
   function addToCart(product) {
-    if (product.current_stock <= 0) {
-      showToast('Stok habis!', 'error')
-      return
-    }
     setCart(prev => {
       const existing = prev.find(item => item.product_id === product.id)
       if (existing) {
-        if (existing.quantity >= product.current_stock) {
-          showToast(`Stok ${product.name} hanya tersisa ${product.current_stock}`, 'warning')
-          return prev
-        }
         return prev.map(item =>
           item.product_id === product.id
             ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.unit_price }
@@ -71,7 +69,6 @@ export default function PenjualanPage() {
         unit_price: product.price,
         quantity: 1,
         subtotal: product.price,
-        max_stock: product.current_stock,
       }]
     })
   }
@@ -82,10 +79,6 @@ export default function PenjualanPage() {
         if (item.product_id !== productId) return item
         const newQty = item.quantity + delta
         if (newQty <= 0) return null
-        if (newQty > item.max_stock) {
-          showToast(`Stok maksimal ${item.max_stock}`, 'warning')
-          return item
-        }
         return { ...item, quantity: newQty, subtotal: newQty * item.unit_price }
       }).filter(Boolean)
     })
@@ -127,7 +120,7 @@ export default function PenjualanPage() {
           total_items: cartCount,
           status: 'completed',
           payment_method: paymentMethod,
-          customer_name: customerName,
+          customer_name: customerName.trim() || 'Umum',
           notes: notes,
         })
         .select()
@@ -151,6 +144,17 @@ export default function PenjualanPage() {
       if (itemsError) throw itemsError
 
       showToast(`Pesanan ${order.order_number} berhasil dibuat! Total: ${formatRupiah(cartTotal)}`, 'success')
+      setReceiptModal({
+        open: true,
+        order: {
+          ...order,
+          customer_name: customerName.trim() || 'Umum',
+          payment_method: paymentMethod,
+          total_amount: cartTotal,
+          created_at: new Date().toISOString(),
+        },
+        items: [...cart],
+      })
       clearCart()
       fetchData()
     } catch (err) {
@@ -168,7 +172,7 @@ export default function PenjualanPage() {
         .update({ status: 'cancelled' })
         .eq('id', orderId)
       if (error) throw error
-      showToast('Pesanan dibatalkan. Stok dikembalikan.', 'success')
+      showToast('Pesanan dibatalkan.', 'success')
       setOrderDetailModal({ open: false, order: null })
       fetchData()
     } catch (err) {
@@ -198,6 +202,17 @@ export default function PenjualanPage() {
 
   const totalPages = Math.ceil(filteredOrders.length / PAGE_SIZE)
   const paginatedOrders = filteredOrders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
+  const filteredPosProducts = useMemo(() => {
+    return products.filter(p => {
+      if (posCategory !== 'all' && p.category_id !== posCategory) return false
+      if (posSearch.trim()) {
+        const q = posSearch.toLowerCase()
+        if (!p.name.toLowerCase().includes(q) && !(p.type || '').toLowerCase().includes(q)) return false
+      }
+      return true
+    })
+  }, [products, posCategory, posSearch])
 
   if (loading) {
     return (
@@ -237,27 +252,61 @@ export default function PenjualanPage() {
         <div className="pos-layout">
           {/* Product Selection */}
           <div>
-            <div className="pos-products-header">
-              <h3>Pilih Produk</h3>
+            <div className="pos-products-header" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <h3 style={{ margin: 0 }}>Pilih Menu ({filteredPosProducts.length})</h3>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="🔍 Cari menu..."
+                  value={posSearch}
+                  onChange={(e) => setPosSearch(e.target.value)}
+                  style={{ maxWidth: '180px', fontSize: '0.8rem', padding: '4px 10px' }}
+                />
+              </div>
+
+              {/* Category Filter Chips in POS */}
+              {categories.length > 0 && (
+                <div className="filter-bar" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  <button
+                    className={`filter-chip ${posCategory === 'all' ? 'active' : ''}`}
+                    onClick={() => setPosCategory('all')}
+                    style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                  >
+                    Semua
+                  </button>
+                  {categories.map(cat => (
+                    <button
+                      key={cat.id}
+                      className={`filter-chip ${posCategory === cat.id ? 'active' : ''}`}
+                      onClick={() => setPosCategory(cat.id)}
+                      style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="pos-products-grid">
-              {products.map(product => {
+              {filteredPosProducts.map(product => {
                 const qty = getCartQty(product.id)
-                const outOfStock = product.current_stock <= 0
                 return (
                   <div
                     key={product.id}
-                    className={`pos-product-card ${outOfStock ? 'out-of-stock' : ''}`}
-                    style={{ '--product-color': product.color_hex }}
-                    onClick={() => { if (!outOfStock) addToCart(product) }}
+                    className="pos-product-card"
+                    style={{ '--product-color': product.color_hex || '#5BA4C9', overflow: 'hidden' }}
+                    onClick={() => addToCart(product)}
                   >
+                    {product.image_url ? (
+                      <div style={{ height: '80px', width: '100%', borderRadius: '6px', overflow: 'hidden', marginBottom: '8px' }}>
+                        <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    ) : null}
                     <div className="pos-product-name">{product.name}</div>
                     <div className="pos-product-type">{product.type}</div>
                     <div className="pos-product-info">
                       <span className="pos-product-price">{formatRupiah(product.price)}</span>
-                      <span className="pos-product-stock-badge">
-                        {outOfStock ? 'Habis' : `${product.current_stock} stok`}
-                      </span>
                     </div>
                     {qty > 0 && (
                       <div className="pos-product-qty" onClick={(e) => e.stopPropagation()}>
@@ -277,6 +326,20 @@ export default function PenjualanPage() {
             <div className="pos-cart-header">
               <h3>🛒 Keranjang</h3>
               {cartCount > 0 && <span className="pos-cart-count">{cartCount} item</span>}
+            </div>
+
+            {/* Input Atas Nama */}
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)' }}>
+              <label className="form-label" style={{ marginBottom: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>👤</span> Atas Nama
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Contoh: Kak Budi / Meja 03..."
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+              />
             </div>
 
             <div className="pos-cart-items">
@@ -305,16 +368,6 @@ export default function PenjualanPage() {
               <>
                 <div className="pos-cart-form">
                   <div className="form-group" style={{ marginBottom: '8px' }}>
-                    <label className="form-label">Nama Pelanggan</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Opsional"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: '8px' }}>
                     <label className="form-label">Pembayaran</label>
                     <select
                       className="form-select"
@@ -331,7 +384,7 @@ export default function PenjualanPage() {
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="Opsional"
+                      placeholder="Opsional (misal: less sugar, hot)"
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                     />
@@ -399,7 +452,7 @@ export default function PenjualanPage() {
                   <thead>
                     <tr>
                       <th>No. Pesanan</th>
-                      <th>Pelanggan</th>
+                      <th>Atas Nama</th>
                       <th>Produk</th>
                       <th>Total</th>
                       <th>Bayar</th>
@@ -527,7 +580,7 @@ export default function PenjualanPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="form-row">
               <div>
-                <span className="form-label">Pelanggan</span>
+                <span className="form-label">Atas Nama</span>
                 <p className="text-sm">{orderDetailModal.order.customer_name || '-'}</p>
               </div>
               <div>
@@ -584,6 +637,79 @@ export default function PenjualanPage() {
               <span style={{ fontFamily: 'var(--font-heading)', fontSize: '1.3rem', fontWeight: 800, color: 'var(--teoffe-primary)' }}>
                 {formatRupiah(orderDetailModal.order.total_amount)}
               </span>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Receipt Modal (Struk Bukti Transaksi) */}
+      <Modal
+        isOpen={receiptModal.open}
+        onClose={() => setReceiptModal({ open: false, order: null, items: [] })}
+        title="🧾 Struk Transaksi Sukses"
+        size="md"
+        footer={
+          <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => window.print()}
+              style={{ flex: 1 }}
+            >
+              🖨️ Cetak Struk
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => setReceiptModal({ open: false, order: null, items: [] })}
+              style={{ flex: 1 }}
+            >
+              Pesanan Baru
+            </button>
+          </div>
+        }
+      >
+        {receiptModal.order && (
+          <div style={{ textAlign: 'center', padding: '10px 0' }}>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, fontFamily: 'var(--font-heading)' }}>TEOFFE</div>
+            <div className="text-xs text-muted" style={{ fontStyle: 'italic', marginBottom: '12px' }}>A Perfect Blend • sip happens.</div>
+
+            <div style={{ borderTop: '1px dashed var(--border-color)', borderBottom: '1px dashed var(--border-color)', padding: '10px 0', margin: '12px 0', textAlign: 'left', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span className="text-muted">No. Pesanan:</span>
+                <span className="text-mono font-bold">{receiptModal.order.order_number}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span className="text-muted">Atas Nama:</span>
+                <span className="font-bold">{receiptModal.order.customer_name}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span className="text-muted">Waktu:</span>
+                <span>{formatDate(receiptModal.order.created_at)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span className="text-muted">Pembayaran:</span>
+                <span>{getPaymentLabel(receiptModal.order.payment_method)}</span>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'left', marginBottom: '14px' }}>
+              <div className="text-xs text-muted font-semibold mb-xs">RINCIAN PESANAN:</div>
+              {receiptModal.items.map((it, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
+                  <span>{it.name} <span className="text-muted">×{it.quantity}</span></span>
+                  <span className="text-mono">{formatRupiah(it.subtotal)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ borderTop: '2px solid var(--border-color)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>Total Bayar:</span>
+              <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--teoffe-primary)', fontFamily: 'var(--font-heading)' }}>
+                {formatRupiah(receiptModal.order.total_amount)}
+              </span>
+            </div>
+
+            <div className="text-xs text-muted" style={{ marginTop: '16px' }}>
+              Terima kasih atas pesanan Anda! 🙏
             </div>
           </div>
         )}
