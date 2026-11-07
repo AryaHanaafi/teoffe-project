@@ -888,8 +888,7 @@ export default function BahanBakuPage() {
                               fontWeight: 700,
                               color: 'var(--teoffe-primary)',
                               background: 'var(--bg-elevated)',
-                              padding: '4px 8px',
-                              borderRadius: '6px',
+                              padding: '4px 8px', borderRadius: 'var(--radius-xs)',
                               fontSize: '0.85rem',
                               border: '1px solid var(--border-accent)',
                             }}
@@ -1027,7 +1026,7 @@ export default function BahanBakuPage() {
                         alignItems: 'center',
                         background: 'var(--bg-elevated)',
                         padding: '8px 12px',
-                        borderRadius: '8px',
+                        borderRadius: 'var(--radius-sm)',
                         border: '1px solid var(--border-color)',
                       }}
                     >
@@ -1135,7 +1134,7 @@ export default function BahanBakuPage() {
               </div>
 
               {/* Rincian Porsi Bahan Baku */}
-              <div style={{ marginTop: '20px', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
+              <div style={{ marginTop: '20px', padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)' }}>
                 <div className="text-xs text-muted mb-xs font-semibold">💡 Catatan Perhitungan:</div>
                 <div className="text-xs text-muted" style={{ lineHeight: 1.5 }}>
                   Setiap kali Anda memperbarui harga beli atau ukuran kemasan bahan baku di menu <b>Inventaris</b>, angka HPP di atas akan otomatis disesuaikan secara real-time.
@@ -1283,7 +1282,7 @@ export default function BahanBakuPage() {
             style={{
               background: 'var(--bg-elevated)',
               padding: '12px',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-sm)',
               marginBottom: '16px',
               border: '1px solid var(--border-color)',
             }}
@@ -1394,7 +1393,7 @@ export default function BahanBakuPage() {
                 style={{
                   background: 'var(--bg-elevated)',
                   padding: '12px',
-                  borderRadius: '8px',
+                  borderRadius: 'var(--radius-sm)',
                   marginBottom: '16px',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -1472,7 +1471,7 @@ export default function BahanBakuPage() {
 
               {/* Preview Hasil Akhir */}
               {stockModal.amount > 0 && (
-                <div style={{ padding: '8px 12px', background: 'var(--bg-card)', borderRadius: '6px', marginBottom: '12px' }}>
+                <div style={{ padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', marginBottom: '12px' }}>
                   <span className="text-xs text-muted">Perkiraan Stok Baru: </span>
                   <span className="text-mono font-bold" style={{ color: stockModal.type === 'in' ? 'var(--status-success)' : 'var(--status-warning)' }}>
                     {formatNumber(

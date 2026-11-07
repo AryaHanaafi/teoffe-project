@@ -295,21 +295,76 @@ export default function PenjualanPage() {
                   <div
                     key={product.id}
                     className="pos-product-card"
-                    style={{ '--product-color': product.color_hex || '#5BA4C9', overflow: 'hidden' }}
+                    style={{
+                      '--product-color': product.color_hex || '#5BA4C9',
+                      overflow: 'hidden',
+                      padding: '10px 12px',
+                    }}
                     onClick={() => addToCart(product)}
                   >
-                    {product.image_url ? (
-                      <div style={{ height: '80px', width: '100%', borderRadius: '6px', overflow: 'hidden', marginBottom: '8px' }}>
-                        <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </div>
-                    ) : null}
-                    <div className="pos-product-name">{product.name}</div>
-                    <div className="pos-product-type">{product.type}</div>
-                    <div className="pos-product-info">
-                      <span className="pos-product-price">{formatRupiah(product.price)}</span>
+                    {/* Uniform Thumbnail Banner */}
+                    <div
+                      style={{
+                        height: '74px',
+                        width: '100%',
+                        borderRadius: 'var(--radius-sm)',
+                        overflow: 'hidden',
+                        marginBottom: '8px',
+                        background: product.image_url
+                          ? 'var(--bg-elevated)'
+                          : `linear-gradient(135deg, ${product.color_hex || '#5BA4C9'}26, ${product.color_hex || '#5BA4C9'}66)`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '1px solid var(--border-color)',
+                      }}
+                    >
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url}
+                          alt={product.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: '1.8rem', opacity: 0.85 }}>☕</span>
+                      )}
                     </div>
+
+                    <div
+                      className="pos-product-name"
+                      style={{
+                        fontSize: '0.88rem',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                      title={product.name}
+                    >
+                      {product.name}
+                    </div>
+                    <div
+                      className="pos-product-type"
+                      style={{
+                        fontSize: '0.72rem',
+                        color: 'var(--text-muted)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        marginBottom: '6px',
+                      }}
+                    >
+                      {product.type || 'Menu'}
+                    </div>
+
+                    <div className="pos-product-info" style={{ marginTop: 'auto' }}>
+                      <span className="pos-product-price" style={{ fontSize: '0.92rem', fontWeight: 800 }}>
+                        {formatRupiah(product.price)}
+                      </span>
+                    </div>
+
                     {qty > 0 && (
-                      <div className="pos-product-qty" onClick={(e) => e.stopPropagation()}>
+                      <div className="pos-product-qty" onClick={(e) => e.stopPropagation()} style={{ marginTop: '8px', paddingTop: '6px' }}>
                         <button className="pos-qty-btn" onClick={() => updateCartQty(product.id, -1)}>−</button>
                         <span className="pos-qty-value">{qty}</span>
                         <button className="pos-qty-btn" onClick={() => updateCartQty(product.id, 1)}>+</button>

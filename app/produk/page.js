@@ -397,85 +397,118 @@ export default function ProdukPage() {
                 justifyContent: 'space-between',
                 padding: '0',
                 overflow: 'hidden',
-                opacity: product.is_active ? 1 : 0.65,
+                opacity: product.is_active ? 1 : 0.7,
                 border: !product.is_active ? '1px dashed var(--border-color)' : undefined,
               }}
             >
-              {/* Product Image / Color Banner */}
-              {product.image_url ? (
-                <div style={{ height: '160px', width: '100%', position: 'relative', overflow: 'hidden', background: 'var(--bg-elevated)' }}>
+              {/* Product Image / Color Banner - Uniform Height */}
+              <div
+                style={{
+                  height: '135px',
+                  width: '100%',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  background: product.image_url
+                    ? 'var(--bg-elevated)'
+                    : `linear-gradient(135deg, ${product.color_hex || '#5BA4C9'}26, ${product.color_hex || '#5BA4C9'}66)`,
+                  borderBottom: '1px solid var(--border-color)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {product.image_url ? (
                   <img
                     src={product.image_url}
                     alt={product.name}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
-                  <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
-                    <span className={`badge ${product.is_active ? 'badge-success' : 'badge-error'}`} style={{ fontSize: '0.72rem', backdropFilter: 'blur(4px)' }}>
-                      {product.is_active ? '● Tersedia' : '● Kosong (Nonaktif)'}
+                ) : (
+                  <div style={{ textAlign: 'center' }}>
+                    <span style={{ fontSize: '2.2rem', display: 'block', opacity: 0.85 }}>☕</span>
+                    <span className="text-xs" style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+                      TEOFFE Blend
                     </span>
                   </div>
-                  <div style={{ position: 'absolute', bottom: '8px', left: '8px' }}>
-                    <span className="badge badge-default" style={{ fontSize: '0.7rem', background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}>
-                      ☕ {product.categories?.name || 'Uncategorized'}
-                    </span>
-                  </div>
+                )}
+
+                {/* Top Badges */}
+                <div style={{ position: 'absolute', top: '8px', left: '8px' }}>
+                  <span
+                    className="badge badge-default"
+                    style={{
+                      fontSize: '0.68rem',
+                      background: 'rgba(10, 10, 20, 0.75)',
+                      backdropFilter: 'blur(6px)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                    }}
+                  >
+                    {product.categories?.name || 'Menu'}
+                  </span>
                 </div>
-              ) : (
-                <div
-                  style={{
-                    height: '120px',
-                    width: '100%',
-                    background: `linear-gradient(135deg, ${product.color_hex || '#5BA4C9'}33, ${product.color_hex || '#5BA4C9'}88)`,
-                    position: 'relative',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <span style={{ fontSize: '2.8rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}>☕</span>
-                  <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
-                    <span className={`badge ${product.is_active ? 'badge-success' : 'badge-error'}`} style={{ fontSize: '0.72rem' }}>
-                      {product.is_active ? '● Tersedia' : '● Kosong (Nonaktif)'}
-                    </span>
-                  </div>
-                  <div style={{ position: 'absolute', bottom: '8px', left: '8px' }}>
-                    <span className="badge badge-default" style={{ fontSize: '0.7rem', background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}>
-                      {product.categories?.name || 'Uncategorized'}
-                    </span>
-                  </div>
+
+                <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
+                  <span
+                    className={`badge ${product.is_active ? 'badge-success' : 'badge-error'}`}
+                    style={{
+                      fontSize: '0.68rem',
+                      backdropFilter: 'blur(6px)',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                    }}
+                  >
+                    {product.is_active ? '● Tersedia' : '● Nonaktif'}
+                  </span>
                 </div>
-              )}
+              </div>
 
               {/* Card Body */}
-              <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div style={{ padding: '14px 16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: product.color_hex || '#5BA4C9' }} />
-                    <span className="text-xs text-muted" style={{ fontWeight: 600 }}>{product.type || 'Signature'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: product.color_hex || '#5BA4C9', flexShrink: 0 }} />
+                    <span className="text-xs text-muted" style={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                      {product.type || 'Signature'}
+                    </span>
                   </div>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '2px 0 4px', color: 'var(--text-primary)' }}>
+                  <h3
+                    style={{
+                      fontSize: '1.05rem',
+                      fontWeight: 700,
+                      marginBottom: '4px',
+                      color: 'var(--text-primary)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                    title={product.name}
+                  >
                     {product.name}
                   </h3>
-                  {product.tagline && (
-                    <p className="text-xs text-muted" style={{ fontStyle: 'italic', marginBottom: '12px' }}>
-                      "{product.tagline}"
-                    </p>
-                  )}
+                  <p
+                    className="text-xs text-muted"
+                    style={{
+                      fontStyle: 'italic',
+                      marginBottom: '10px',
+                      minHeight: '18px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                    title={product.tagline || ''}
+                  >
+                    {product.tagline ? `"${product.tagline}"` : '—'}
+                  </p>
                 </div>
 
-                {/* Price and Status Footer */}
-                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginTop: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                {/* Price and Actions Footer */}
+                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginTop: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
                     <div>
-                      <span className="text-xs text-muted block">Harga Jual</span>
-                      <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--teoffe-primary)', fontFamily: 'var(--font-heading)' }}>
-                        {formatRupiah(product.price)}
+                      <span className="text-xs text-muted" style={{ display: 'block', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Harga Jual
                       </span>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span className="text-xs text-muted block">Status Kasir</span>
-                      <span className={`badge ${product.is_active ? 'badge-success' : 'badge-error'}`} style={{ fontSize: '0.75rem', padding: '3px 8px' }}>
-                        {product.is_active ? '● Muncul di Kasir' : '● Disembunyikan'}
+                      <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--teoffe-primary)', fontFamily: 'var(--font-heading)' }}>
+                        {formatRupiah(product.price)}
                       </span>
                     </div>
                   </div>
@@ -483,25 +516,25 @@ export default function ProdukPage() {
                   {/* Actions Grid */}
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button
-                      className="btn btn-sm btn-primary"
+                      className="btn btn-xs btn-primary"
                       onClick={() => openEditProductModal(product)}
-                      style={{ flex: 1, fontSize: '0.82rem', padding: '6px 8px' }}
+                      style={{ flex: 1, padding: '6px 8px' }}
                     >
-                      ✏️ Edit Menu
+                      ✏️ Edit
                     </button>
                     <button
-                      className={`btn btn-sm ${product.is_active ? 'btn-secondary' : 'btn-success'}`}
+                      className={`btn btn-xs ${product.is_active ? 'btn-secondary' : 'btn-success'}`}
                       onClick={() => toggleProductStatus(product)}
-                      style={{ fontSize: '0.82rem', padding: '6px 10px' }}
-                      title={product.is_active ? 'Klik untuk menonaktifkan menu ini dari kasir' : 'Klik untuk mengaktifkan menu ini di kasir'}
+                      style={{ padding: '6px 10px' }}
+                      title={product.is_active ? 'Sembunyikan menu dari kasir' : 'Munculkan menu di kasir'}
                     >
-                      {product.is_active ? '⏸️ Nonaktifkan' : '▶️ Aktifkan'}
+                      {product.is_active ? '⏸️ Nonaktif' : '▶️ Aktifkan'}
                     </button>
                     <button
-                      className="btn btn-sm btn-danger"
+                      className="btn btn-xs btn-danger"
                       onClick={() => setDeleteModal({ open: true, product })}
                       title="Hapus Menu"
-                      style={{ padding: '6px 10px' }}
+                      style={{ padding: '6px 8px' }}
                     >
                       🗑️
                     </button>
@@ -532,7 +565,7 @@ export default function ProdukPage() {
       >
         <form onSubmit={handleSubmitProduct}>
           {/* Foto Produk Section */}
-          <div style={{ marginBottom: '16px', background: 'var(--bg-elevated)', padding: '14px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+          <div style={{ marginBottom: '16px', background: 'var(--bg-elevated)', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
             <label className="form-label font-semibold" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               📸 Foto / Gambar Menu
             </label>
@@ -541,9 +574,7 @@ export default function ProdukPage() {
               {/* Image Preview Box */}
               <div
                 style={{
-                  width: '90px',
-                  height: '90px',
-                  borderRadius: '8px',
+                  width: '90px', height: '90px', borderRadius: 'var(--radius-sm)',
                   border: '2px dashed var(--border-color)',
                   display: 'flex',
                   alignItems: 'center',
