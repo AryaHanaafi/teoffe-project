@@ -230,8 +230,12 @@ export default function BahanBakuPage() {
 
   // Calculator state
   const [selectedPreset, setSelectedPreset] = useState(DRINK_PRESETS[0].name)
+  const [recipeDrinkName, setRecipeDrinkName] = useState(DRINK_PRESETS[0].name)
   const [customRecipe, setCustomRecipe] = useState(DRINK_PRESETS[0].recipe)
   const [calculatorSellingPrice, setCalculatorSellingPrice] = useState(DRINK_PRESETS[0].sellingPrice)
+  const [calculatorCategoryFilter, setCalculatorCategoryFilter] = useState('Semua')
+  const [savedRecipes, setSavedRecipes] = useState([])
+  const [pickerModalOpen, setPickerModalOpen] = useState(false)
 
   // Form state untuk Add/Edit Material
   const [formData, setFormData] = useState({
@@ -533,14 +537,57 @@ export default function BahanBakuPage() {
     }
   }
 
+  // Load saved custom recipes on mount
+  useEffect(() => {
+    try {
+      const local = localStorage.getItem('teoffe_custom_recipes')
+      if (local) setSavedRecipes(JSON.parse(local))
+    } catch {}
+  }, [])
+
   // Kalkulator HPP Preset change
   function handlePresetChange(presetName) {
     setSelectedPreset(presetName)
+    if (presetName === 'custom') {
+      setRecipeDrinkName('Racikan Kustom Baru')
+      return
+    }
+    // Check in built-in presets
     const preset = DRINK_PRESETS.find(p => p.name === presetName)
     if (preset) {
-      setCustomRecipe(preset.recipe)
+      setRecipeDrinkName(preset.name)
+      setCustomRecipe(preset.recipe.map(r => ({ ...r })))
       setCalculatorSellingPrice(preset.sellingPrice)
+      return
     }
+    // Check in saved custom recipes
+    const saved = savedRecipes.find(r => r.name === presetName)
+    if (saved) {
+      setRecipeDrinkName(saved.name)
+      setCustomRecipe(saved.recipe.map(r => ({ ...r })))
+      setCalculatorSellingPrice(saved.sellingPrice)
+    }
+  }
+
+  // Tambah bahan ke racikan
+  function addMaterialToRecipe(material, defaultAmount) {
+    const existingIndex = customRecipe.findIndex(
+      r => (r.materialId && r.materialId === material.id) || (r.materialName && r.materialName.toLowerCase() === material.name.toLowerCase())
+    )
+    if (existingIndex !== -1) {
+      showToast(`${material.name} sudah ada di dalam racikan`, 'info')
+      return
+    }
+    const defaultQty = defaultAmount || (material.unit === 'pcs' ? 1 : material.unit === 'ml' ? 50 : 15)
+    setCustomRecipe(prev => [
+      ...prev,
+      {
+        materialId: material.id,
+        materialName: material.name,
+        amount: defaultQty,
+      }
+    ])
+    showToast(`${material.name} ditambahkan ke racikan`, 'success')
   }
 
   // Update takaran bahan di kalkulator
@@ -552,11 +599,36 @@ export default function BahanBakuPage() {
     })
   }
 
+  // Penyesuaian takaran cepat (stepper +/-)
+  function adjustRecipeItemAmount(index, delta) {
+    setCustomRecipe(prev => {
+      const next = [...prev]
+      const current = parseFloat(next[index].amount) || 0
+      const updated = Math.max(0, Math.round((current + delta) * 10) / 10)
+      next[index] = { ...next[index], amount: updated }
+      return next
+    })
+  }
+
+  // Ganti bahan dalam baris
+  function changeRecipeItemMaterial(index, newMaterialName) {
+    const targetMat = materials.find(m => m.name === newMaterialName)
+    setCustomRecipe(prev => {
+      const next = [...prev]
+      next[index] = {
+        ...next[index],
+        materialId: targetMat ? targetMat.id : undefined,
+        materialName: newMaterialName,
+      }
+      return next
+    })
+  }
+
   // Tambah baris bahan di kalkulator
   function addRecipeItem() {
     const available = materials.find(m => !customRecipe.some(r => r.materialName === m.name)) || materials[0]
     if (!available) return
-    setCustomRecipe(prev => [...prev, { materialName: available.name, amount: 10 }])
+    addMaterialToRecipe(available)
   }
 
   // Hapus baris bahan di kalkulator
@@ -564,16 +636,86 @@ export default function BahanBakuPage() {
     setCustomRecipe(prev => prev.filter((_, i) => i !== index))
   }
 
+  // Kosongkan seluruh racikan untuk mulai dari kanvas bersih
+  function clearRecipe() {
+    setCustomRecipe([])
+    setSelectedPreset('custom')
+    setRecipeDrinkName('Racikan Kustom Baru')
+    showToast('Racikan dikosongkan. Silakan pilih bahan-bahan Anda.', 'info')
+  }
+
+  // Reset racikan ke preset terpilih
+  function resetToPreset(presetName) {
+    const target = presetName || DRINK_PRESETS[0].name
+    setSelectedPreset(target)
+    const preset = DRINK_PRESETS.find(p => p.name === target)
+    if (preset) {
+      setRecipeDrinkName(preset.name)
+      setCustomRecipe(preset.recipe.map(r => ({ ...r })))
+      setCalculatorSellingPrice(preset.sellingPrice)
+      showToast(`Resep "${preset.name}" dimuat kembali`, 'success')
+    }
+  }
+
+  // Simpan racikan saat ini ke savedRecipes
+  function handleSaveCurrentRecipe() {
+    if (!recipeDrinkName.trim()) {
+      showToast('Beri nama racikan terlebih dahulu!', 'error')
+      return
+    }
+    if (customRecipe.length === 0) {
+      showToast('Racikan belum memiliki bahan baku!', 'error')
+      return
+    }
+    const newEntry = {
+      name: recipeDrinkName.trim(),
+      sellingPrice: calculatorSellingPrice,
+      recipe: customRecipe,
+      savedAt: new Date().toISOString(),
+    }
+    const updatedList = [
+      ...savedRecipes.filter(r => r.name.toLowerCase() !== recipeDrinkName.trim().toLowerCase()),
+      newEntry,
+    ]
+    setSavedRecipes(updatedList)
+    localStorage.setItem('teoffe_custom_recipes', JSON.stringify(updatedList))
+    setSelectedPreset(newEntry.name)
+    showToast(`Racikan "${newEntry.name}" berhasil disimpan!`, 'success')
+  }
+
+  // Salin rincian kalkulasi ke clipboard
+  function handleCopyRecipeSummary() {
+    if (customRecipe.length === 0) return
+    let text = `=== TEOFFE HPP KALKULATOR ===\n`
+    text += `Menu: ${recipeDrinkName}\n`
+    text += `Rencana Harga Jual: ${formatRupiah(recipeCalculation.sellingPrice)}\n`
+    text += `Total Modal HPP: ${formatRupiah(recipeCalculation.totalHPP)}\n`
+    text += `Gross Profit: ${formatRupiah(recipeCalculation.profit)} (${recipeCalculation.marginPercent}%)\n\n`
+    text += `KOMPOSISI BAHAN:\n`
+    recipeCalculation.details.forEach(d => {
+      text += `- ${d.name}: ${d.amount} ${d.unit} (${formatRupiah(d.subtotal)} | ${d.sharePercent}%)\n`
+    })
+    navigator.clipboard.writeText(text)
+    showToast('Rincian HPP berhasil disalin ke clipboard!', 'success')
+  }
+
   // Total HPP Resep Terkalkulasi
   const recipeCalculation = useMemo(() => {
     let totalHPP = 0
     const details = customRecipe.map(item => {
-      const mat = materials.find(m => m.name.toLowerCase() === item.materialName.toLowerCase())
+      const mat = materials.find(m =>
+        (item.materialId && m.id === item.materialId) ||
+        m.name.toLowerCase() === (item.materialName || '').toLowerCase()
+      )
       const unitCost = mat ? mat.unit_cost : 0
       const subtotal = (item.amount || 0) * unitCost
       totalHPP += subtotal
       return {
         ...item,
+        material: mat,
+        name: mat ? mat.name : item.materialName,
+        category: mat ? mat.category : 'Lainnya',
+        icon: mat ? (mat.icon || '☕') : '☕',
         unit: mat ? mat.unit : 'g',
         unitCost,
         subtotal: Math.round(subtotal),
@@ -585,7 +727,18 @@ export default function BahanBakuPage() {
     const profit = sellingPrice - totalHPP
     const marginPercent = sellingPrice > 0 ? ((profit / sellingPrice) * 100).toFixed(1) : 0
 
-    return { totalHPP: Math.round(totalHPP), details, sellingPrice, profit: Math.round(profit), marginPercent }
+    const detailsWithShare = details.map(d => ({
+      ...d,
+      sharePercent: totalHPP > 0 ? Math.round((d.subtotal / totalHPP) * 100) : 0,
+    }))
+
+    return {
+      totalHPP: Math.round(totalHPP),
+      details: detailsWithShare,
+      sellingPrice,
+      profit: Math.round(profit),
+      marginPercent: parseFloat(marginPercent) || 0,
+    }
   }, [customRecipe, materials, calculatorSellingPrice])
 
   // Computed KPI Stats
@@ -983,161 +1136,554 @@ export default function BahanBakuPage() {
       {/* TAB KALKULATOR HPP */}
       {activeTab === 'calculator' && (
         <div className="animate-fadeIn">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-            {/* Sisi Kiri: Pilihan Resep & Komposisi Bahan */}
-            <div className="stat-card" style={{ padding: '20px', cursor: 'default' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>🧮 Racikan Resep & Takaran</h3>
-                <button className="btn btn-xs btn-primary" onClick={addRecipeItem}>
+          {/* Header Kontrol Resep */}
+          <div
+            className="stat-card mb-lg"
+            style={{
+              padding: '16px 20px',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '16px',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'default',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
+              <div>
+                <label className="form-label" style={{ marginBottom: '4px', fontSize: '0.72rem' }}>
+                  PILIH RESEP MENU:
+                </label>
+                <select
+                  className="form-select"
+                  style={{ minWidth: '240px', padding: '6px 12px', fontSize: '0.86rem' }}
+                  value={selectedPreset}
+                  onChange={(e) => handlePresetChange(e.target.value)}
+                >
+                  <optgroup label="☕ Menu Preset TEOFFE">
+                    {DRINK_PRESETS.map(p => (
+                      <option key={p.name} value={p.name}>{p.name}</option>
+                    ))}
+                  </optgroup>
+                  {savedRecipes.length > 0 && (
+                    <optgroup label="⭐ Racikan Tersimpan Saya">
+                      {savedRecipes.map(r => (
+                        <option key={r.name} value={r.name}>⭐ {r.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="✏️ Kustom">
+                    <option value="custom">-- Buat Racikan Baru Sendiri --</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <label className="form-label" style={{ marginBottom: '4px', fontSize: '0.72rem' }}>
+                  NAMA MINUMAN / RACIKAN:
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  style={{ padding: '6px 12px', fontSize: '0.86rem', fontWeight: 600 }}
+                  value={recipeDrinkName}
+                  onChange={(e) => {
+                    setRecipeDrinkName(e.target.value)
+                    setSelectedPreset('custom')
+                  }}
+                  placeholder="Ketik nama minuman racikan Anda..."
+                />
+              </div>
+            </div>
+
+            {/* Quick Action Buttons */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={() => setPickerModalOpen(true)}
+                title="Pilih bahan dari daftar inventaris lengkap"
+              >
+                ➕ Pilih Bahan Baku
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={clearRecipe}
+                title="Bersihkan semua bahan untuk mulai dari awal"
+              >
+                🧹 Kosongkan
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => resetToPreset(selectedPreset !== 'custom' ? selectedPreset : DRINK_PRESETS[0].name)}
+                title="Kembalikan ke resep bawaan"
+              >
+                🔄 Reset
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-success"
+                onClick={handleSaveCurrentRecipe}
+                title="Simpan racikan ini agar bisa dipakai kembali"
+              >
+                💾 Simpan Racikan
+              </button>
+            </div>
+          </div>
+
+          {/* Visual Bahan Baku Picker (Quick Add Chips) */}
+          <div
+            className="card mb-lg"
+            style={{
+              padding: '16px 20px',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🥫</span> Katalog Bahan Baku Cepat
+                </h4>
+                <p className="text-xs text-muted" style={{ marginTop: '2px' }}>
+                  Klik bahan di bawah untuk langsung menambahkannya ke dalam racikan Anda:
+                </p>
+              </div>
+
+              {/* Category Filter for Quick Chips */}
+              <div className="filter-bar" style={{ display: 'flex', gap: '4px' }}>
+                {['Semua', 'Kopi & Espresso', 'Dairy & Krimer', 'Sirup & Pemanis', 'Kemasan & Packaging'].map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={`filter-chip ${calculatorCategoryFilter === cat ? 'active' : ''}`}
+                    onClick={() => setCalculatorCategoryFilter(cat)}
+                    style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick Chips Grid */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {materials
+                .filter(m => calculatorCategoryFilter === 'Semua' || m.category === calculatorCategoryFilter)
+                .map(mat => {
+                  const isSelected = customRecipe.some(
+                    r => (r.materialId && r.materialId === mat.id) || (r.materialName && r.materialName.toLowerCase() === mat.name.toLowerCase())
+                  )
+
+                  return (
+                    <button
+                      key={mat.id}
+                      type="button"
+                      onClick={() => addMaterialToRecipe(mat)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 12px',
+                        borderRadius: 'var(--radius-sm)',
+                        background: isSelected ? 'rgba(91, 164, 201, 0.15)' : 'var(--bg-elevated)',
+                        border: isSelected ? '1px solid var(--teoffe-primary)' : '1px solid var(--border-color)',
+                        color: isSelected ? 'var(--teoffe-primary)' : 'var(--text-primary)',
+                        fontSize: '0.82rem',
+                        fontWeight: isSelected ? 600 : 500,
+                        cursor: 'pointer',
+                        transition: 'all var(--transition-fast)',
+                      }}
+                      title={isSelected ? 'Sudah ada di resep (klik untuk informasi)' : `Klik untuk menambahkan ${mat.name} ke racikan`}
+                    >
+                      <span>{mat.icon || '☕'}</span>
+                      <span>{mat.name}</span>
+                      <span className="text-mono text-xs" style={{ opacity: 0.8, color: 'var(--text-secondary)' }}>
+                        ({formatUnitCost(mat.unit_cost, mat.unit)})
+                      </span>
+                      {isSelected ? (
+                        <span style={{ fontSize: '0.75rem', marginLeft: '2px', color: 'var(--status-success)' }}>✓</span>
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', marginLeft: '2px', opacity: 0.6 }}>+</span>
+                      )}
+                    </button>
+                  )
+                })}
+            </div>
+          </div>
+
+          {/* Grid Dua Kolom: Tabel Racikan (Kiri) & Analisis Margin (Kanan) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
+            {/* SISI KIRI: TABEL RACIKAN RESEP */}
+            <div className="card" style={{ padding: '20px', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>⚖️</span> Komposisi Racikan ({customRecipe.length} Bahan)
+                  </h3>
+                  <p className="text-xs text-muted" style={{ marginTop: '2px' }}>
+                    Atur takaran gram/ml setiap bahan untuk menghitung HPP secara real-time
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-primary"
+                  onClick={() => setPickerModalOpen(true)}
+                >
                   ➕ Tambah Bahan
                 </button>
               </div>
 
-              {/* Pilihan Preset Minuman Teoffe */}
-              <div className="form-group mb-md">
-                <label className="form-label">Pilih Menu Preset Teoffe:</label>
-                <select
-                  className="form-select"
-                  value={selectedPreset}
-                  onChange={(e) => handlePresetChange(e.target.value)}
-                >
-                  {DRINK_PRESETS.map(p => (
-                    <option key={p.name} value={p.name}>{p.name}</option>
-                  ))}
-                  <option value="custom">-- Buat Racikan Baru Sendiri --</option>
-                </select>
-              </div>
-
-              {/* Tabel Komposisi Bahan */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
-                {customRecipe.map((item, idx) => {
-                  const mat = materials.find(m => m.name.toLowerCase() === item.materialName.toLowerCase())
-                  const unit = mat ? mat.unit : 'g'
-                  const unitCost = mat ? mat.unit_cost : 0
-                  const subtotal = Math.round((item.amount || 0) * unitCost)
-
-                  return (
+              {customRecipe.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {recipeCalculation.details.map((item, idx) => (
                     <div
                       key={idx}
                       style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 90px 90px 32px',
-                        gap: '8px',
-                        alignItems: 'center',
                         background: 'var(--bg-elevated)',
-                        padding: '8px 12px',
-                        borderRadius: 'var(--radius-sm)',
                         border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '10px 14px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
                       }}
                     >
-                      {/* Dropdown Bahan */}
-                      <select
-                        className="form-select"
-                        style={{ fontSize: '0.85rem', padding: '6px' }}
-                        value={item.materialName}
-                        onChange={(e) => {
-                          const newName = e.target.value
-                          setCustomRecipe(prev => {
-                            const next = [...prev]
-                            next[idx] = { ...next[idx], materialName: newName }
-                            return next
-                          })
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                        {/* Selector / Nama Bahan */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
+                          <select
+                            className="form-select"
+                            style={{
+                              fontSize: '0.86rem',
+                              fontWeight: 600,
+                              padding: '4px 8px',
+                              background: 'transparent',
+                              border: '1px solid transparent',
+                              cursor: 'pointer',
+                            }}
+                            value={item.name}
+                            onChange={(e) => changeRecipeItemMaterial(idx, e.target.value)}
+                          >
+                            {materials.map(m => (
+                              <option key={m.id} value={m.name}>
+                                {m.name} ({formatUnitCost(m.unit_cost, m.unit)})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Subtotal Biaya */}
+                        <div style={{ textAlign: 'right' }}>
+                          <span
+                            className="text-mono"
+                            style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--teoffe-primary)' }}
+                          >
+                            {formatRupiah(item.subtotal)}
+                          </span>
+                          <span className="text-xs text-muted" style={{ display: 'block', fontSize: '0.68rem' }}>
+                            {item.sharePercent}% dari HPP
+                          </span>
+                        </div>
+
+                        {/* Hapus Bahan */}
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-danger"
+                          style={{ padding: '4px 8px', marginLeft: '4px' }}
+                          onClick={() => removeRecipeItem(idx)}
+                          title="Hapus bahan dari racikan"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+
+                      {/* Baris Takaran + Stepper */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                          paddingTop: '6px',
                         }}
                       >
-                        {materials.map(m => (
-                          <option key={m.id} value={m.name}>{m.name} ({formatUnitCost(m.unit_cost, m.unit)})</option>
-                        ))}
-                      </select>
-
-                      {/* Input Takaran */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <input
-                          type="number"
-                          step="any"
-                          className="form-input"
-                          style={{ fontSize: '0.85rem', padding: '6px', textAlign: 'right' }}
-                          value={item.amount}
-                          onChange={(e) => updateRecipeItemAmount(idx, e.target.value)}
-                        />
-                        <span className="text-xs text-muted" style={{ minWidth: '22px' }}>{unit}</span>
-                      </div>
-
-                      {/* Subtotal Biaya */}
-                      <div style={{ textAlign: 'right' }}>
-                        <span className="text-mono text-xs font-semibold" style={{ color: 'var(--teoffe-primary)' }}>
-                          {formatRupiah(subtotal)}
+                        <span className="text-xs text-muted">
+                          Harga Modal: <b style={{ color: 'var(--text-secondary)' }}>{formatUnitCost(item.unitCost, item.unit)}</b>
                         </span>
-                      </div>
 
-                      {/* Hapus Baris */}
-                      <button
-                        className="btn btn-xs btn-danger"
-                        style={{ padding: '4px', height: '28px', width: '28px', borderRadius: '4px' }}
-                        onClick={() => removeRecipeItem(idx)}
-                        title="Hapus bahan dari resep"
-                      >
-                        ✕
-                      </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span className="text-xs text-muted" style={{ marginRight: '4px' }}>Takaran:</span>
+                          <button
+                            type="button"
+                            className="btn btn-xs btn-secondary"
+                            style={{ padding: '2px 6px', fontSize: '0.72rem' }}
+                            onClick={() => adjustRecipeItemAmount(idx, item.unit === 'pcs' ? -1 : -5)}
+                            title="Kurangi takaran"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            className="form-input"
+                            style={{
+                              width: '70px',
+                              padding: '3px 6px',
+                              textAlign: 'center',
+                              fontSize: '0.85rem',
+                              fontWeight: 700,
+                            }}
+                            value={item.amount}
+                            onChange={(e) => updateRecipeItemAmount(idx, e.target.value)}
+                          />
+                          <span
+                            className="text-xs text-muted"
+                            style={{ minWidth: '24px', fontWeight: 600, fontSize: '0.78rem' }}
+                          >
+                            {item.unit}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-xs btn-secondary"
+                            style={{ padding: '2px 6px', fontSize: '0.72rem' }}
+                            onClick={() => adjustRecipeItemAmount(idx, item.unit === 'pcs' ? 1 : 5)}
+                            title="Tambah takaran"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  )
-                })}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className="empty-state"
+                  style={{
+                    padding: '40px 20px',
+                    background: 'var(--bg-elevated)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px dashed var(--border-color)',
+                  }}
+                >
+                  <div style={{ fontSize: '2.4rem', marginBottom: '8px' }}>☕</div>
+                  <p className="empty-state-title" style={{ fontSize: '0.95rem' }}>
+                    Belum ada bahan di dalam racikan
+                  </p>
+                  <p className="empty-state-text text-xs text-muted" style={{ maxWidth: '320px', margin: '4px auto 16px' }}>
+                    Pilih bahan dari katalog cepat di atas, atau klik tombol di bawah untuk memilih bahan inventaris Anda.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={() => setPickerModalOpen(true)}
+                  >
+                    ➕ Pilih Bahan Baku Sekarang
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Sisi Kanan: Ringkasan Biaya HPP & Keuntungan */}
-            <div className="stat-card" style={{ padding: '20px', cursor: 'default', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            {/* SISI KANAN: ANALISIS HPP & MARGIN PROFIT */}
+            <div className="card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>📊 Analisis HPP & Margin Profit</h3>
-
-                {/* Input Harga Jual */}
-                <div className="form-group mb-md">
-                  <label className="form-label">Rencana Harga Jual ke Konsumen (Rp):</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={calculatorSellingPrice}
-                    onChange={(e) => setCalculatorSellingPrice(parseFloat(e.target.value) || 0)}
-                    style={{ fontSize: '1.1rem', fontWeight: 700 }}
-                  />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>📊</span> Analisis HPP & Profit
+                  </h3>
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-secondary"
+                    onClick={handleCopyRecipeSummary}
+                    title="Salin ringkasan kalkulasi"
+                  >
+                    📋 Salin Rincian
+                  </button>
                 </div>
 
-                {/* Breakdown List */}
-                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span className="text-sm text-muted">Total Modal Bahan (HPP per Cup):</span>
-                    <span className="text-mono font-bold" style={{ color: 'var(--status-error)', fontSize: '1rem' }}>
+                {/* Input Rencana Harga Jual */}
+                <div
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '12px 14px',
+                    marginBottom: '16px',
+                  }}
+                >
+                  <label className="form-label" style={{ fontSize: '0.72rem', marginBottom: '6px' }}>
+                    RENCANA HARGA JUAL KE KONSUMEN:
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-secondary)' }}>Rp</span>
+                    <input
+                      type="number"
+                      step="500"
+                      min="0"
+                      className="form-input"
+                      style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--teoffe-primary)' }}
+                      value={calculatorSellingPrice}
+                      onChange={(e) => setCalculatorSellingPrice(parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+
+                {/* KPI Breakdown Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+                  <div
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '12px',
+                    }}
+                  >
+                    <span className="text-xs text-muted" style={{ display: 'block', fontSize: '0.7rem', textTransform: 'uppercase' }}>
+                      Total Modal HPP
+                    </span>
+                    <span
+                      className="text-mono"
+                      style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--status-error)', display: 'block', marginTop: '2px' }}
+                    >
                       {formatRupiah(recipeCalculation.totalHPP)}
                     </span>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span className="text-sm text-muted">Harga Jual per Cup:</span>
-                    <span className="text-mono font-bold" style={{ color: 'var(--text-primary)', fontSize: '1rem' }}>
-                      {formatRupiah(recipeCalculation.sellingPrice)}
+                    <span className="text-xs text-muted" style={{ fontSize: '0.68rem' }}>
+                      per 1 cup siap saji
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed var(--border-color)', paddingTop: '8px' }}>
-                    <span className="text-sm font-semibold">Gross Profit (Laba Kotor):</span>
-                    <span className="text-mono font-bold" style={{ color: 'var(--status-success)', fontSize: '1.15rem' }}>
+                  <div
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '12px',
+                    }}
+                  >
+                    <span className="text-xs text-muted" style={{ display: 'block', fontSize: '0.7rem', textTransform: 'uppercase' }}>
+                      Gross Profit / Laba
+                    </span>
+                    <span
+                      className="text-mono"
+                      style={{
+                        fontSize: '1.25rem',
+                        fontWeight: 800,
+                        color: recipeCalculation.profit > 0 ? 'var(--status-success)' : 'var(--status-error)',
+                        display: 'block',
+                        marginTop: '2px',
+                      }}
+                    >
                       {formatRupiah(recipeCalculation.profit)}
                     </span>
+                    <span className="text-xs text-muted" style={{ fontSize: '0.68rem' }}>
+                      keuntungan per cup
+                    </span>
                   </div>
+                </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span className="text-sm font-semibold">Margin Keuntungan:</span>
-                    <span className="badge badge-success" style={{ fontSize: '0.9rem', padding: '4px 10px' }}>
+                {/* Margin Profit Health Status */}
+                <div
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '12px 14px',
+                    marginBottom: '16px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span className="text-xs font-semibold">Margin Keuntungan Bersih:</span>
+                    <span
+                      className={`badge ${
+                        recipeCalculation.marginPercent >= 60
+                          ? 'badge-success'
+                          : recipeCalculation.marginPercent >= 40
+                          ? 'badge-warning'
+                          : 'badge-error'
+                      }`}
+                      style={{ fontSize: '0.85rem', padding: '3px 10px' }}
+                    >
                       {recipeCalculation.marginPercent}%
                     </span>
                   </div>
+
+                  {/* Progress Bar Margin */}
+                  <div style={{ width: '100%', height: '8px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${Math.min(100, Math.max(0, recipeCalculation.marginPercent))}%`,
+                        background:
+                          recipeCalculation.marginPercent >= 60
+                            ? 'var(--status-success)'
+                            : recipeCalculation.marginPercent >= 40
+                            ? 'var(--status-warning)'
+                            : 'var(--status-error)',
+                        transition: 'width var(--transition-base)',
+                      }}
+                    />
+                  </div>
+
+                  <p className="text-xs text-muted" style={{ marginTop: '8px', fontSize: '0.72rem', lineHeight: 1.4 }}>
+                    {recipeCalculation.marginPercent >= 60 ? (
+                      <span style={{ color: 'var(--status-success)' }}>
+                        🟢 <b>Margin Sangat Sehat</b> (&gt; 60%): Racikan ini sangat menguntungkan dan ideal untuk scale-up operasional cafe.
+                      </span>
+                    ) : recipeCalculation.marginPercent >= 40 ? (
+                      <span style={{ color: 'var(--status-warning)' }}>
+                        🟡 <b>Margin Standar</b> (40% - 60%): Margin cukup aman untuk menutup biaya operasional dan pegawai.
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--status-error)' }}>
+                        🔴 <b>Margin Terlalu Tipis</b> (&lt; 40%): Pertimbangkan untuk menaikkan harga jual atau menyesuaikan takaran bahan premium.
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                {/* Simulasi Proyeksi Penjualan */}
+                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                  <span className="text-xs text-muted font-semibold" style={{ display: 'block', marginBottom: '8px', textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                    📈 Proyeksi Keuntungan Berdasarkan Volume:
+                  </span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                    {[50, 100, 500].map(qty => (
+                      <div
+                        key={qty}
+                        style={{
+                          background: 'var(--bg-elevated)',
+                          padding: '8px',
+                          borderRadius: 'var(--radius-xs)',
+                          textAlign: 'center',
+                          border: '1px solid rgba(255,255,255,0.04)',
+                        }}
+                      >
+                        <span className="text-xs text-muted" style={{ display: 'block', fontSize: '0.68rem' }}>{qty} Cup</span>
+                        <span className="text-mono font-bold text-xs" style={{ color: 'var(--status-success)' }}>
+                          {formatRupiah(recipeCalculation.profit * qty)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* Rincian Porsi Bahan Baku */}
-              <div style={{ marginTop: '20px', padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)' }}>
-                <div className="text-xs text-muted mb-xs font-semibold">💡 Catatan Perhitungan:</div>
-                <div className="text-xs text-muted" style={{ lineHeight: 1.5 }}>
-                  Setiap kali Anda memperbarui harga beli atau ukuran kemasan bahan baku di menu <b>Inventaris</b>, angka HPP di atas akan otomatis disesuaikan secara real-time.
+              {/* Footer Note */}
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '10px 12px',
+                  background: 'var(--bg-elevated)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-color)',
+                }}
+              >
+                <div className="text-xs text-muted" style={{ fontSize: '0.72rem', lineHeight: 1.4 }}>
+                  💡 <b>Real-time Sync:</b> Perubahan harga beli kemasan di menu <b>Inventaris</b> akan langsung mengupdate kalkulasi HPP ini tanpa perlu rumus manual.
                 </div>
               </div>
             </div>
@@ -1196,6 +1742,87 @@ export default function BahanBakuPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL: PILIH BAHAN BAKU KE DALAM KALKULATOR HPP */}
+      <Modal
+        isOpen={pickerModalOpen}
+        onClose={() => setPickerModalOpen(false)}
+        title="🥫 Pilih Bahan Baku dari Inventaris"
+        size="lg"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <p className="text-xs text-muted">
+            Pilih bahan baku di bawah ini untuk ditambahkan ke racikan HPP Anda:
+          </p>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+              gap: '10px',
+              maxHeight: '400px',
+              overflowY: 'auto',
+              padding: '2px',
+            }}
+          >
+            {materials.map(mat => {
+              const isSelected = customRecipe.some(
+                r => (r.materialId && r.materialId === mat.id) || (r.materialName && r.materialName.toLowerCase() === mat.name.toLowerCase())
+              )
+
+              return (
+                <div
+                  key={mat.id}
+                  style={{
+                    background: isSelected ? 'rgba(91, 164, 201, 0.12)' : 'var(--bg-elevated)',
+                    border: isSelected ? '1.5px solid var(--teoffe-primary)' : '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '10px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '1.2rem' }}>{mat.icon || '☕'}</span>
+                      <span style={{ fontSize: '0.88rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {mat.name}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                      <span className="text-xs text-muted">{mat.category}</span>
+                      <span className="text-xs text-mono font-bold" style={{ color: 'var(--teoffe-primary)' }}>
+                        {formatUnitCost(mat.unit_cost, mat.unit)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${isSelected ? 'btn-secondary' : 'btn-primary'}`}
+                    onClick={() => addMaterialToRecipe(mat)}
+                    style={{ whiteSpace: 'nowrap', padding: '5px 10px' }}
+                  >
+                    {isSelected ? '✓ Ditambahkan' : '+ Pilih'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={() => setPickerModalOpen(false)}
+            >
+              Selesai Memilih
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* MODAL: TAMBAH / EDIT BAHAN BAKU */}
       <Modal
