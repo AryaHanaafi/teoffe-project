@@ -1792,7 +1792,6 @@ export default function BahanBakuPage() {
       )}
 
       {/* TAB RIWAYAT MUTASI */}
-      {activeTab === 'logs' && ({/* TAB RIWAYAT MUTASI */}
       {activeTab === 'logs' && (
         <div className="animate-fadeIn">
           <div className="table-container">
