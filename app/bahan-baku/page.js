@@ -235,7 +235,9 @@ export default function BahanBakuPage() {
   const [calculatorSellingPrice, setCalculatorSellingPrice] = useState(DRINK_PRESETS[0].sellingPrice)
   const [calculatorCategoryFilter, setCalculatorCategoryFilter] = useState('Semua')
   const [savedRecipes, setSavedRecipes] = useState([])
-  const [pickerModalOpen, setPickerModalOpen] = useState(false)
+  const [addIngredientModal, setAddIngredientModal] = useState({ open: false, materialId: '', amount: '' })
+  const [inlineMaterialId, setInlineMaterialId] = useState('')
+  const [inlineAmount, setInlineAmount] = useState('')
 
   // Form state untuk Add/Edit Material
   const [formData, setFormData] = useState({
@@ -569,25 +571,59 @@ export default function BahanBakuPage() {
     }
   }
 
-  // Tambah bahan ke racikan
-  function addMaterialToRecipe(material, defaultAmount) {
-    const existingIndex = customRecipe.findIndex(
-      r => (r.materialId && r.materialId === material.id) || (r.materialName && r.materialName.toLowerCase() === material.name.toLowerCase())
-    )
-    if (existingIndex !== -1) {
-      showToast(`${material.name} sudah ada di dalam racikan`, 'info')
-      return
+  // Buka modal untuk memilih dan mengatur takaran bahan
+  function openAddModalForMaterial(material) {
+    const target = material || (materials.length > 0 ? materials[0] : null)
+    setAddIngredientModal({
+      open: true,
+      materialId: target ? target.id : '',
+      amount: target ? (target.unit === 'pcs' ? 1 : target.unit === 'ml' ? 50 : 15) : '',
+    })
+  }
+
+  // Konfirmasi penambahan bahan pilihan user ke dalam racikan
+  function handleConfirmAddMaterial(materialId, amount) {
+    if (!materialId) {
+      showToast('Pilih bahan baku terlebih dahulu!', 'error')
+      return false
     }
-    const defaultQty = defaultAmount || (material.unit === 'pcs' ? 1 : material.unit === 'ml' ? 50 : 15)
-    setCustomRecipe(prev => [
-      ...prev,
-      {
-        materialId: material.id,
-        materialName: material.name,
-        amount: defaultQty,
-      }
-    ])
-    showToast(`${material.name} ditambahkan ke racikan`, 'success')
+    const portion = parseFloat(amount)
+    if (!portion || portion <= 0) {
+      showToast('Masukkan takaran porsi lebih dari 0!', 'error')
+      return false
+    }
+    const mat = materials.find(m => m.id === materialId)
+    if (!mat) {
+      showToast('Bahan baku tidak ditemukan!', 'error')
+      return false
+    }
+
+    const existingIndex = customRecipe.findIndex(
+      r => (r.materialId && r.materialId === mat.id) || (r.materialName && r.materialName.toLowerCase() === mat.name.toLowerCase())
+    )
+
+    if (existingIndex !== -1) {
+      setCustomRecipe(prev => {
+        const next = [...prev]
+        next[existingIndex] = {
+          ...next[existingIndex],
+          amount: (parseFloat(next[existingIndex].amount) || 0) + portion,
+        }
+        return next
+      })
+      showToast(`Takaran ${mat.name} ditambah ${portion} ${mat.unit}!`, 'success')
+    } else {
+      setCustomRecipe(prev => [
+        ...prev,
+        {
+          materialId: mat.id,
+          materialName: mat.name,
+          amount: portion,
+        }
+      ])
+      showToast(`${mat.name} (${portion} ${mat.unit}) berhasil dimasukkan ke racikan!`, 'success')
+    }
+    return true
   }
 
   // Update takaran bahan di kalkulator
@@ -624,11 +660,9 @@ export default function BahanBakuPage() {
     })
   }
 
-  // Tambah baris bahan di kalkulator
+  // Buka dialog tambah bahan
   function addRecipeItem() {
-    const available = materials.find(m => !customRecipe.some(r => r.materialName === m.name)) || materials[0]
-    if (!available) return
-    addMaterialToRecipe(available)
+    openAddModalForMaterial(null)
   }
 
   // Hapus baris bahan di kalkulator
@@ -1201,10 +1235,10 @@ export default function BahanBakuPage() {
               <button
                 type="button"
                 className="btn btn-sm btn-primary"
-                onClick={() => setPickerModalOpen(true)}
-                title="Pilih bahan dari daftar inventaris lengkap"
+                onClick={() => openAddModalForMaterial(null)}
+                title="Pilih bahan dan takaran yang ingin ditambahkan"
               >
-                ➕ Pilih Bahan Baku
+                ➕ Tambah Bahan
               </button>
               <button
                 type="button"
@@ -1212,7 +1246,7 @@ export default function BahanBakuPage() {
                 onClick={clearRecipe}
                 title="Bersihkan semua bahan untuk mulai dari awal"
               >
-                🧹 Kosongkan
+                🧹 Kosongkan Resep
               </button>
               <button
                 type="button"
@@ -1233,7 +1267,7 @@ export default function BahanBakuPage() {
             </div>
           </div>
 
-          {/* Visual Bahan Baku Picker (Quick Add Chips) */}
+          {/* Katalog Bahan Baku (Pilih Sendiri Bahan yang Ingin Ditambahkan) */}
           <div
             className="card mb-lg"
             style={{
@@ -1244,14 +1278,14 @@ export default function BahanBakuPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
               <div>
                 <h4 style={{ fontSize: '0.92rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span>🥫</span> Katalog Bahan Baku Cepat
+                  <span>🥫</span> Pilih Bahan Sendiri dari Katalog:
                 </h4>
                 <p className="text-xs text-muted" style={{ marginTop: '2px' }}>
-                  Klik bahan di bawah untuk langsung menambahkannya ke dalam racikan Anda:
+                  Klik bahan di bawah untuk menentukan takaran dan memasukkannya ke dalam racikan:
                 </p>
               </div>
 
-              {/* Category Filter for Quick Chips */}
+              {/* Filter Kategori */}
               <div className="filter-bar" style={{ display: 'flex', gap: '4px' }}>
                 {['Semua', 'Kopi & Espresso', 'Dairy & Krimer', 'Sirup & Pemanis', 'Kemasan & Packaging'].map(cat => (
                   <button
@@ -1267,7 +1301,7 @@ export default function BahanBakuPage() {
               </div>
             </div>
 
-            {/* Quick Chips Grid */}
+            {/* Quick Chips - Klik membuka modal dengan bahan terpilih untuk konfirmasi takaran */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {materials
                 .filter(m => calculatorCategoryFilter === 'Semua' || m.category === calculatorCategoryFilter)
@@ -1280,7 +1314,7 @@ export default function BahanBakuPage() {
                     <button
                       key={mat.id}
                       type="button"
-                      onClick={() => addMaterialToRecipe(mat)}
+                      onClick={() => openAddModalForMaterial(mat)}
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -1295,7 +1329,7 @@ export default function BahanBakuPage() {
                         cursor: 'pointer',
                         transition: 'all var(--transition-fast)',
                       }}
-                      title={isSelected ? 'Sudah ada di resep (klik untuk informasi)' : `Klik untuk menambahkan ${mat.name} ke racikan`}
+                      title={`Klik untuk memilih dan mengatur takaran ${mat.name}`}
                     >
                       <span>{mat.icon || '☕'}</span>
                       <span>{mat.name}</span>
@@ -1303,9 +1337,9 @@ export default function BahanBakuPage() {
                         ({formatUnitCost(mat.unit_cost, mat.unit)})
                       </span>
                       {isSelected ? (
-                        <span style={{ fontSize: '0.75rem', marginLeft: '2px', color: 'var(--status-success)' }}>✓</span>
+                        <span style={{ fontSize: '0.75rem', marginLeft: '2px', color: 'var(--status-success)' }}>✓ Di Resep</span>
                       ) : (
-                        <span style={{ fontSize: '0.75rem', marginLeft: '2px', opacity: 0.6 }}>+</span>
+                        <span style={{ fontSize: '0.75rem', marginLeft: '2px', color: 'var(--teoffe-primary)' }}>+ Pilih</span>
                       )}
                     </button>
                   )
@@ -1323,16 +1357,82 @@ export default function BahanBakuPage() {
                     <span>⚖️</span> Komposisi Racikan ({customRecipe.length} Bahan)
                   </h3>
                   <p className="text-xs text-muted" style={{ marginTop: '2px' }}>
-                    Atur takaran gram/ml setiap bahan untuk menghitung HPP secara real-time
+                    Takaran porsi bahan saat ini untuk 1 cup minuman
                   </p>
                 </div>
                 <button
                   type="button"
                   className="btn btn-xs btn-primary"
-                  onClick={() => setPickerModalOpen(true)}
+                  onClick={() => openAddModalForMaterial(null)}
                 >
                   ➕ Tambah Bahan
                 </button>
+              </div>
+
+              {/* Form Inline Tambah Bahan Cepat (Pilih Sendiri di Bawah Tabel) */}
+              <div
+                style={{
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '12px 14px',
+                  marginBottom: '16px',
+                }}
+              >
+                <div className="text-xs font-semibold mb-xs" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>➕</span> Tambah Bahan Sendiri ke Racikan:
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px auto', gap: '8px', alignItems: 'center' }}>
+                  <select
+                    className="form-select"
+                    style={{ fontSize: '0.85rem', padding: '6px 10px' }}
+                    value={inlineMaterialId}
+                    onChange={(e) => {
+                      const mId = e.target.value
+                      const mat = materials.find(m => m.id === mId)
+                      setInlineMaterialId(mId)
+                      setInlineAmount(mat ? (mat.unit === 'pcs' ? '1' : mat.unit === 'ml' ? '50' : '15') : '')
+                    }}
+                  >
+                    <option value="">-- Pilih Bahan Baku yang Ingin Ditambahkan --</option>
+                    {materials.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.icon || '☕'} {m.name} ({formatUnitCost(m.unit_cost, m.unit)})
+                      </option>
+                    ))}
+                  </select>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="Takaran"
+                      className="form-input"
+                      style={{ fontSize: '0.85rem', padding: '6px 8px', textAlign: 'center' }}
+                      value={inlineAmount}
+                      onChange={(e) => setInlineAmount(e.target.value)}
+                    />
+                    <span className="text-xs text-muted" style={{ minWidth: '24px', fontWeight: 600 }}>
+                      {materials.find(m => m.id === inlineMaterialId)?.unit || 'g/ml'}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={() => {
+                      const success = handleConfirmAddMaterial(inlineMaterialId, inlineAmount)
+                      if (success) {
+                        setInlineMaterialId('')
+                        setInlineAmount('')
+                      }
+                    }}
+                    style={{ whiteSpace: 'nowrap', padding: '6px 14px' }}
+                  >
+                    ➕ Masukkan
+                  </button>
+                </div>
               </div>
 
               {customRecipe.length > 0 ? (
@@ -1475,12 +1575,12 @@ export default function BahanBakuPage() {
                     Belum ada bahan di dalam racikan
                   </p>
                   <p className="empty-state-text text-xs text-muted" style={{ maxWidth: '320px', margin: '4px auto 16px' }}>
-                    Pilih bahan dari katalog cepat di atas, atau klik tombol di bawah untuk memilih bahan inventaris Anda.
+                    Pilih bahan dari dropdown di atas atau klik katalog bahan baku untuk memulai racikan Anda.
                   </p>
                   <button
                     type="button"
                     className="btn btn-sm btn-primary"
-                    onClick={() => setPickerModalOpen(true)}
+                    onClick={() => openAddModalForMaterial(null)}
                   >
                     ➕ Pilih Bahan Baku Sekarang
                   </button>
@@ -1692,6 +1792,7 @@ export default function BahanBakuPage() {
       )}
 
       {/* TAB RIWAYAT MUTASI */}
+      {activeTab === 'logs' && ({/* TAB RIWAYAT MUTASI */}
       {activeTab === 'logs' && (
         <div className="animate-fadeIn">
           <div className="table-container">
@@ -1743,85 +1844,173 @@ export default function BahanBakuPage() {
         </div>
       )}
 
-      {/* MODAL: PILIH BAHAN BAKU KE DALAM KALKULATOR HPP */}
+      {/* MODAL: PILIH & TAMBAH BAHAN KE RACIKAN RESEP */}
       <Modal
-        isOpen={pickerModalOpen}
-        onClose={() => setPickerModalOpen(false)}
-        title="🥫 Pilih Bahan Baku dari Inventaris"
-        size="lg"
+        isOpen={addIngredientModal.open}
+        onClose={() => setAddIngredientModal({ open: false, materialId: '', amount: '' })}
+        title="➕ Pilih Bahan & Tentukan Takaran"
+        size="md"
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <p className="text-xs text-muted">
-            Pilih bahan baku di bawah ini untuk ditambahkan ke racikan HPP Anda:
-          </p>
+        {(() => {
+          const selectedMat = materials.find(m => m.id === addIngredientModal.materialId) || materials[0]
+          const unit = selectedMat ? selectedMat.unit : 'g'
+          const unitCost = selectedMat ? selectedMat.unit_cost : 0
+          const portionNum = parseFloat(addIngredientModal.amount) || 0
+          const subtotalCost = Math.round(portionNum * unitCost)
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-              gap: '10px',
-              maxHeight: '400px',
-              overflowY: 'auto',
-              padding: '2px',
-            }}
-          >
-            {materials.map(mat => {
-              const isSelected = customRecipe.some(
-                r => (r.materialId && r.materialId === mat.id) || (r.materialName && r.materialName.toLowerCase() === mat.name.toLowerCase())
-              )
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p className="text-xs text-muted">
+                Pilih bahan baku yang ingin dimasukkan ke dalam racikan dan tentukan jumlah takarannya:
+              </p>
 
-              return (
+              {/* 1. Pilih Bahan Baku */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: '0.75rem' }}>
+                  1. PILIH BAHAN BAKU:
+                </label>
+                <select
+                  className="form-select"
+                  style={{ fontSize: '0.9rem', padding: '8px 12px' }}
+                  value={addIngredientModal.materialId}
+                  onChange={(e) => {
+                    const mId = e.target.value
+                    const mat = materials.find(m => m.id === mId)
+                    setAddIngredientModal(prev => ({
+                      ...prev,
+                      materialId: mId,
+                      amount: mat ? (mat.unit === 'pcs' ? '1' : mat.unit === 'ml' ? '50' : '15') : prev.amount,
+                    }))
+                  }}
+                >
+                  {materials.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.icon || '☕'} {m.name} — {formatUnitCost(m.unit_cost, m.unit)} (Stok: {formatNumber(m.current_stock)} {m.unit})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Detail Bahan Terpilih */}
+              {selectedMat && (
                 <div
-                  key={mat.id}
                   style={{
-                    background: isSelected ? 'rgba(91, 164, 201, 0.12)' : 'var(--bg-elevated)',
-                    border: isSelected ? '1.5px solid var(--teoffe-primary)' : '1px solid var(--border-color)',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: 'var(--radius-sm)',
-                    padding: '10px 12px',
+                    padding: '10px 14px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    gap: '8px',
                   }}
                 >
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '1.2rem' }}>{mat.icon || '☕'}</span>
-                      <span style={{ fontSize: '0.88rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {mat.name}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
-                      <span className="text-xs text-muted">{mat.category}</span>
-                      <span className="text-xs text-mono font-bold" style={{ color: 'var(--teoffe-primary)' }}>
-                        {formatUnitCost(mat.unit_cost, mat.unit)}
-                      </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '1.4rem' }}>{selectedMat.icon || '☕'}</span>
+                    <div>
+                      <span style={{ fontSize: '0.88rem', fontWeight: 700, display: 'block' }}>{selectedMat.name}</span>
+                      <span className="text-xs text-muted">{selectedMat.category}</span>
                     </div>
                   </div>
-
-                  <button
-                    type="button"
-                    className={`btn btn-xs ${isSelected ? 'btn-secondary' : 'btn-primary'}`}
-                    onClick={() => addMaterialToRecipe(mat)}
-                    style={{ whiteSpace: 'nowrap', padding: '5px 10px' }}
-                  >
-                    {isSelected ? '✓ Ditambahkan' : '+ Pilih'}
-                  </button>
+                  <div style={{ textAlign: 'right' }}>
+                    <span className="text-xs text-muted" style={{ display: 'block', fontSize: '0.68rem' }}>Harga Modal</span>
+                    <span className="text-mono font-bold" style={{ color: 'var(--teoffe-primary)', fontSize: '0.9rem' }}>
+                      {formatUnitCost(selectedMat.unit_cost, selectedMat.unit)}
+                    </span>
+                  </div>
                 </div>
-              )
-            })}
-          </div>
+              )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-            <button
-              type="button"
-              className="btn btn-sm btn-primary"
-              onClick={() => setPickerModalOpen(false)}
-            >
-              Selesai Memilih
-            </button>
-          </div>
-        </div>
+              {/* 2. Tentukan Takaran Porsi */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: '0.75rem' }}>
+                  2. TAKARAN PORSI PER CUP:
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="Contoh: 18"
+                    className="form-input"
+                    style={{ fontSize: '1.1rem', fontWeight: 700, textAlign: 'center', flex: 1 }}
+                    value={addIngredientModal.amount}
+                    onChange={(e) => setAddIngredientModal(prev => ({ ...prev, amount: e.target.value }))}
+                    autoFocus
+                  />
+                  <span
+                    className="badge badge-default"
+                    style={{ fontSize: '0.9rem', padding: '8px 14px', minWidth: '50px', textAlign: 'center' }}
+                  >
+                    {unit}
+                  </span>
+                </div>
+
+                {/* Quick Takaran Buttons */}
+                <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+                  <span className="text-xs text-muted" style={{ alignSelf: 'center', marginRight: '4px' }}>Pilihan Cepat:</span>
+                  {(unit === 'pcs'
+                    ? [1, 2, 3]
+                    : unit === 'ml'
+                    ? [10, 15, 20, 25, 30, 50, 100, 120]
+                    : [5, 10, 15, 18, 20, 25, 30]
+                  ).map(val => (
+                    <button
+                      key={val}
+                      type="button"
+                      className="btn btn-xs btn-secondary"
+                      style={{ padding: '3px 8px', fontSize: '0.75rem' }}
+                      onClick={() => setAddIngredientModal(prev => ({ ...prev, amount: val.toString() }))}
+                    >
+                      {val} {unit}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Kalkulasi Subtotal Live */}
+              <div
+                style={{
+                  background: 'rgba(91, 164, 201, 0.08)',
+                  border: '1px solid var(--border-accent)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span className="text-xs text-muted">Subtotal Modal Bahan Ini:</span>
+                <span className="text-mono font-bold" style={{ color: 'var(--teoffe-primary)', fontSize: '1.1rem' }}>
+                  {formatRupiah(subtotalCost)}
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setAddIngredientModal({ open: false, materialId: '', amount: '' })}
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  disabled={!addIngredientModal.materialId || !parseFloat(addIngredientModal.amount)}
+                  onClick={() => {
+                    const success = handleConfirmAddMaterial(addIngredientModal.materialId, addIngredientModal.amount)
+                    if (success) {
+                      setAddIngredientModal({ open: false, materialId: '', amount: '' })
+                    }
+                  }}
+                >
+                  ➕ Masukkan Bahan ke Resep
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </Modal>
 
       {/* MODAL: TAMBAH / EDIT BAHAN BAKU */}
