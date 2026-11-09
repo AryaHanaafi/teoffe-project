@@ -118,7 +118,7 @@ export default function PenjualanPage() {
           order_number: '',
           total_amount: cartTotal,
           total_items: cartCount,
-          status: 'completed',
+          status: 'pending',
           payment_method: paymentMethod,
           customer_name: customerName.trim() || 'Umum',
           notes: notes,
@@ -165,19 +165,33 @@ export default function PenjualanPage() {
     }
   }
 
-  async function handleCancelOrder(orderId) {
+  async function handleUpdateStatus(orderId, newStatus) {
+    const prevOrders = [...orders]
+    // Optimistic update
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o))
+    if (orderDetailModal.order && orderDetailModal.order.id === orderId) {
+      setOrderDetailModal(prev => ({
+        ...prev,
+        order: { ...prev.order, status: newStatus }
+      }))
+    }
+
     try {
       const { error } = await supabase
         .from('orders')
-        .update({ status: 'cancelled' })
+        .update({ status: newStatus })
         .eq('id', orderId)
       if (error) throw error
-      showToast('Pesanan dibatalkan.', 'success')
-      setOrderDetailModal({ open: false, order: null })
-      fetchData()
+      showToast(`Status pesanan diubah ke "${getStatusLabel(newStatus)}"`, 'success')
     } catch (err) {
-      showToast('Gagal membatalkan pesanan: ' + err.message, 'error')
+      console.error('Update status error:', err)
+      showToast('Gagal mengubah status: ' + err.message, 'error')
+      setOrders(prevOrders)
     }
+  }
+
+  async function handleCancelOrder(orderId) {
+    await handleUpdateStatus(orderId, 'cancelled')
   }
 
   async function openOrderDetail(order) {
@@ -476,7 +490,7 @@ export default function PenjualanPage() {
           {/* Filters */}
           <div className="flex items-center justify-between gap-md mb-lg" style={{ flexWrap: 'wrap' }}>
             <div className="filter-bar">
-              {['all', 'completed', 'pending', 'confirmed', 'cancelled'].map(status => (
+              {['all', 'pending', 'cancelled', 'completed'].map(status => (
                 <button
                   key={status}
                   className={`filter-chip ${filterStatus === status ? 'active' : ''}`}
@@ -545,9 +559,20 @@ export default function PenjualanPage() {
                         </td>
                         <td className="text-sm">{getPaymentLabel(order.payment_method)}</td>
                         <td>
-                          <span className={`badge ${getStatusClass(order.status)}`}>
-                            {getStatusLabel(order.status)}
-                          </span>
+                          <select
+                            className={`status-select ${order.status}`}
+                            value={order.status}
+                            onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            title="Klik untuk ubah status pesanan"
+                          >
+                            <option value="pending">Diproses</option>
+                            <option value="cancelled">Dibatalkan</option>
+                            <option value="completed">Selesai</option>
+                            {order.status === 'confirmed' && (
+                              <option value="confirmed">Dikonfirmasi</option>
+                            )}
+                          </select>
                         </td>
                         <td className="text-sm text-muted">{formatDate(order.created_at)}</td>
                         <td>
@@ -646,7 +671,21 @@ export default function PenjualanPage() {
             <div className="form-row">
               <div>
                 <span className="form-label">Status</span>
-                <p><span className={`badge ${getStatusClass(orderDetailModal.order.status)}`}>{getStatusLabel(orderDetailModal.order.status)}</span></p>
+                <div style={{ marginTop: '4px' }}>
+                  <select
+                    className={`status-select ${orderDetailModal.order.status}`}
+                    value={orderDetailModal.order.status}
+                    onChange={(e) => handleUpdateStatus(orderDetailModal.order.id, e.target.value)}
+                    style={{ fontSize: '0.82rem', padding: '6px 28px 6px 10px' }}
+                  >
+                    <option value="pending">Diproses</option>
+                    <option value="cancelled">Dibatalkan</option>
+                    <option value="completed">Selesai</option>
+                    {orderDetailModal.order.status === 'confirmed' && (
+                      <option value="confirmed">Dikonfirmasi</option>
+                    )}
+                  </select>
+                </div>
               </div>
               <div>
                 <span className="form-label">Waktu</span>
